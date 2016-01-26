@@ -1,5 +1,4 @@
 # Load all necessary libraries
-
 library(rvest)
 library(stringr)
 library(dplyr)
@@ -7,17 +6,14 @@ library(ggplot2)
 library(GGally)
 library(stringr)
 
-# Global variable
+# Global variables
 woonplaatsen <- read.csv2("/Users/wendellkuling/Repos/R_training_web_scraping/Woonplaatsen_NL.csv",stringsAsFactors = F, col.names = c("Naam"))
 
-
-testurl <- 'http://www.marktplaats.nl/z/auto-s/bmw/3-serie.html?categoryId=96&attributes=model%2C3-Serie&currentPage=1'
-
-
-# TODO: build loop that gets all the data
-
+# Function definitions
 scraper <- function(url) {
-  
+  # Function that scrapes all pages starting from URL with currentpage = 1 to last-page
+  # Args: URL from Marktplaats, ending on 'currentPage=' (to be scraped)
+  # Returns: dataframe with observations from all pages from URL to last-page
   webpage <- read_html(url)
   output <- data.frame()  
   
@@ -60,30 +56,38 @@ scraper <- function(url) {
 
   return(output_wide)
 }
+
+cleaner <- function(DF) {
+  # Function that cleans 'raw' dataframe to dataframe with right format
+  # Args: DF: scraped dataframe in 'raw' format with columns 'prijs', jaartal', 'kilometrage', 'plaats' and 'beschrijving'
+  # Returns: cleaned dataframe (unchanged names, only format changed) (beschrijving is unchanged)
+  # Note: all rows which contain 'NA' values are removed by this function
+  
+  DF$prijs <- DF$prijs %>%
+    gsub("[^0-9,]",'', .) %>% 
+    gsub(",", ".", .) %>% 
+    as.numeric()
+
+  DF$jaartal <- DF$jaartal %>%
+    as.numeric()
+  
+  DF$kilometrage <- DF$kilometrage %>%
+    gsub("[^0-9]",'', .) %>% 
+    as.numeric()
+  
+  DF$plaats <- DF$plaats %>%
+    strsplit(",") %>%
+    lapply(function(x) x[[1]])
+  
+  DF <- DF[rowSums(is.na(data)) == 0,]
+  
+return(DF)
+}  
+
+# Main code
  
-voorgj <- scraper(testurl)
+demourl <- 'http://www.marktplaats.nl/z/auto-s/bmw/3-serie.html?categoryId=96&attributes=model%2C3-Serie&currentPage=1'
 
-# TODO: setting proper format and types
-
-prices <- beamers %>%
-  html_nodes('.price-and-thumb-container .ellipsis') %>%
-  html_text() %>%
-  gsub("[^0-9,]",'', .) %>% 
-  gsub(",", ".", .) %>% 
-  as.numeric()
-
-years <- beamers %>%
-  html_nodes('.defaultSnippet .mp-listing-attributes:nth-child(1)') %>%
-  html_text() %>%
-  # gsub("[^0-9,]",'', .) %>% 
-  # gsub(",", ".", .) %>% 
-  as.numeric()
-
-kms <- beamers %>%
-  html_nodes('.mp-listing-attributes:nth-child(3)') %>%
-  html_text() %>%
-  gsub("[^0-9]",'', .) %>% 
-  as.numeric()
+demourl %>% scraper() %>% cleaner()
 
 
-numberpages
