@@ -13,25 +13,31 @@ library(tm)
 library(data.table)
 library(dplyr)
 library(tidyr)
+library(tm)
+library(wordcloud)
+library(SnowballC)
+library(RColorBrewer)
+library(wordcloud)
 
-# Just in case there are proxy problems
-Sys.setenv(http_proxy="")
-Sys.setenv(https_proxy="")
-Sys.unsetenv("http_proxy")
-Sys.setenv(no_proxy="*")
+
 
 # Global variable
-#woonplaatsen <- read.csv2("/Users/wendellkuling/Repos/R_training_web_scraping/Woonplaatsen_NL.csv",stringsAsFactors = F, col.names = c("Naam"))
-woonplaatsen <- read.csv2("~/R_training_web_scraping/Woonplaatsen_NL.csv",stringsAsFactors = F, col.names = c("Naam"))
+if(Sys.getenv("Corp_key") == "HP73FQ") {
+  woonplaatsen <- read.csv2("~/R_training_web_scraping/Woonplaatsen_NL.csv",stringsAsFactors = F, col.names = c("Naam"))
+  # Just in case there are proxy problems
+  Sys.setenv(http_proxy="")
+  Sys.setenv(https_proxy="")
+  Sys.unsetenv("http_proxy")
+  Sys.setenv(no_proxy="*")
+  } else {
+  woonplaatsen <- read.csv2("/Users/wendellkuling/Repos/R_training_web_scraping/Woonplaatsen_NL.csv",stringsAsFactors = F, col.names = c("Naam"))
+}
 
-
-testurl <- 'http://www.marktplaats.nl/z/auto-s/bmw/3-serie.html?categoryId=96&attributes=model%2C3-Serie&currentPage=1'
-
-
-# TODO: build loop that gets all the data
-
+# Function definitions
 scraper <- function(url) {
-  
+  # Function that scrapes all pages starting from URL with currentpage = 1 to last-page
+  # Args: URL from Marktplaats, ending on 'currentPage=' (to be scraped)
+  # Returns: dataframe with observations from all pages from URL to last-page
   webpage <- read_html(url)
   output <- data.frame()  
   
@@ -74,40 +80,48 @@ scraper <- function(url) {
 
   return(output_wide)
 }
+
+cleaner <- function(DF) {
+  # Function that cleans 'raw' dataframe to dataframe with right format
+  # Args: DF: scraped dataframe in 'raw' format with columns 'prijs', jaartal', 'kilometrage', 'plaats' and 'beschrijving'
+  # Returns: cleaned dataframe (unchanged names, only format changed)
+  # Note: all rows which contain 'NA' values are removed by this function
+  
+  DF$prijs <- DF$prijs %>%
+    gsub("[^0-9,]",'', .) %>% 
+    gsub(",", ".", .) %>% 
+    as.numeric()
+
+  DF$jaartal <- DF$jaartal %>%
+    as.numeric()
+  
+  DF$kilometrage <- DF$kilometrage %>%
+    gsub("[^0-9]",'', .) %>% 
+    as.numeric()
+  
+  DF$plaats <- DF$plaats %>%
+    strsplit(",") %>%
+    lapply(function(x) x[[1]])
+  
+  DF$beschrijving <- DF$beschrijving %>%
+    tolower()
+  
+  DF <- DF[rowSums(is.na(DF)) == 0, ]
+  
+return(DF)
+}  
+
+# Main code
  
-data <- scraper(testurl)
+demourl <- 'http://www.marktplaats.nl/z/auto-s/bmw/3-serie.html?categoryId=96&attributes=model%2C3-Serie&currentPage=1'
 
-# TODO: setting proper format and types
-
-prices <- beamers %>%
-  html_nodes('.price-and-thumb-container .ellipsis') %>%
-  html_text() %>%
-  gsub("[^0-9,]",'', .) %>% 
-  gsub(",", ".", .) %>% 
-  as.numeric()
-
-years <- beamers %>%
-  html_nodes('.defaultSnippet .mp-listing-attributes:nth-child(1)') %>%
-  html_text() %>%
-  # gsub("[^0-9,]",'', .) %>% 
-  # gsub(",", ".", .) %>% 
-  as.numeric()
-
-kms <- beamers %>%
-  html_nodes('.mp-listing-attributes:nth-child(3)') %>%
-  html_text() %>%
-  gsub("[^0-9]",'', .) %>% 
-  as.numeric()
+voorgj2 <- demourl %>% 
+  scraper() %>% 
+  cleaner()
 
 
 
 
-
-library(tm)
-library(wordcloud)
-library(SnowballC)
-library(RColorBrewer)
-library(wordcloud)
 
 # Get descriptions
 d = data$beschrijving
@@ -144,7 +158,6 @@ for(word in words) {
       #suppressWarnings(wordcloud(words = d$word, freq = d$freq, min.freq = 1,
       #      max.words=200, random.order=FALSE, rot.per=0.35,
       #      colors=brewer.pal(8,"Set1")))
-
 
 
 
