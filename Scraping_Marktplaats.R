@@ -60,7 +60,7 @@ scraper <- function(url) {
 cleaner <- function(DF) {
   # Function that cleans 'raw' dataframe to dataframe with right format
   # Args: DF: scraped dataframe in 'raw' format with columns 'prijs', jaartal', 'kilometrage', 'plaats' and 'beschrijving'
-  # Returns: cleaned dataframe (unchanged names, only format changed) (beschrijving is unchanged)
+  # Returns: cleaned dataframe (unchanged names, only format changed)
   # Note: all rows which contain 'NA' values are removed by this function
   
   DF$prijs <- DF$prijs %>%
@@ -79,7 +79,10 @@ cleaner <- function(DF) {
     strsplit(",") %>%
     lapply(function(x) x[[1]])
   
-  DF <- DF[rowSums(is.na(data)) == 0,]
+  DF$beschrijving <- DF$beschrijving %>%
+    tolower()
+  
+  DF <- DF[rowSums(is.na(DF)) == 0, ]
   
 return(DF)
 }  
@@ -88,6 +91,8 @@ return(DF)
  
 demourl <- 'http://www.marktplaats.nl/z/auto-s/bmw/3-serie.html?categoryId=96&attributes=model%2C3-Serie&currentPage=1'
 
-demourl %>% scraper() %>% cleaner()
+voorgj2 <- demourl %>% 
+  scraper() %>% 
+  cleaner()
 
 
