@@ -1,4 +1,3 @@
-
 # Cleanup
 rm(list=ls())
 
@@ -13,13 +12,12 @@ library(tm)
 library(data.table)
 library(dplyr)
 library(tidyr)
-library(tm)
 library(wordcloud)
 library(SnowballC)
 library(RColorBrewer)
-library(wordcloud)
-
-
+library(xgboost)
+library(Ckmeans.1d.dp)
+library(taucharts)
 
 # Global variable
 if(Sys.getenv("Corp_key") == "HP73FQ") {
@@ -63,7 +61,7 @@ scraper <- function(url) {
       mutate(type = ifelse((substr(value, start = nchar(value)-1, stop = nchar(value)) == "km" &
                               nchar(value) <= 12 &
                               grepl("\\d", value) == T), "kilometrage", type)) %>%
-      mutate(type = ifelse((str_count(value, "\n") == 2) & (grepl("â‚¬", value) | grepl("â,¬Â", value)), "prijs", type))  %>%
+      mutate(type = ifelse((str_count(value, "\n") == 2) & (grepl("â‚¬", value) | grepl("?,??", value)), "prijs", type))  %>%
       mutate(type = ifelse(is.na(type) & lapply(strsplit(value, ","), function(x) x[[1]]) %in% woonplaatsen$Naam, "plaats", type)) %>%
       mutate(type = ifelse(is.na(type), "beschrijving", type))
     
@@ -106,52 +104,114 @@ cleaner <- function(DF) {
   DF$beschrijving <- DF$beschrijving %>%
     tolower()
   
-  DF <- DF[rowSums(is.na(DF)) == 0, ]
+  DF <- DF[rowSums(is.na(DF)) == 0, ] %>%
+    filter(!beschrijving %like% "maand") %>%
+    filter(prijs > 500)
   
 return(DF)
 }  
 
+bow <- function(data, top=50) {
+# return dataframe which includes bag-of-words (top tokens of beschrijving)
+# TODO: document function ;)
+  
+  # Get descriptions
+  d = data$beschrijving
+  # Load the data as a corpus
+  docs <- Corpus(VectorSource(d))
+  # Convert the text to lower case
+  docs <- tm_map(docs, content_transformer(tolower))
+  # Remove numbers
+  docs <- tm_map(docs, removeNumbers)
+  # Remove your own stop word
+  # specify your stopwords as a character vector
+  docs <- tm_map(docs, removeWords, c("het", "een","van","bij","voor","met","binnen","o.a.","de")) 
+  # Remove punctuations
+  docs <- tm_map(docs, removePunctuation)
+  # Eliminate extra white spaces
+  docs <- tm_map(docs, stripWhitespace)
+  # Build a matrix
+  dtm <- TermDocumentMatrix(docs)
+  m <- as.matrix(dtm)
+  v <- sort(rowSums(m),decreasing=TRUE)
+  d <- data.frame(word = names(v),freq=v)
+  # Select top 50 occuring words
+  d <- d[1:top,]
+  # Create list of words
+  words <- d$word
+  
+  # Add columns for each word
+  for(word in words) {
+    data[word] <- ifelse(tolower(data$beschrijving) %like% word,1,0)
+  }
+return(data)
+}
+
+
 # Main code
- 
+
 demourl <- 'http://www.marktplaats.nl/z/auto-s/bmw/3-serie.html?categoryId=96&attributes=model%2C3-Serie&currentPage=1'
 
-voorgj2 <- demourl %>% 
+df <- demourl %>% 
   scraper() %>% 
-  cleaner()
+  cleaner() %>%
+  bow()
+
+
+# Splitting to train and test set
+idx = sample(nrow(df),floor(nrow(df)*.2))
+test = df[idx,]
+train = df[-idx,]
+
+ytest = test$prijs
+ytrain = train$prijs
+
+test <- test %>% select(-adnr, -prijs, -beschrijving, -plaats)
+train <- train %>% select(-adnr, -prijs, -beschrijving, -plaats)
+
+trainMatrix <- train %>% as.matrix
+testMatrix <- test %>% as.matrix
+
+# Let's start by estimating a XGBoost model
+  
+param <- list(booster = "gbtree", objective = "reg:linear", 
+              max.depth = 25, eta = 0.1, nthread = 2, nround = 2,  
+              min_child_weight = 1, subsample = 0.8, colsample_bytree = 0.8,num_parallel_tree = 1)
+  
+bst = xgboost(param=param, data = trainMatrix, label = ytrain, nrounds=200)
+
+names <- dimnames(trainMatrix)[[2]]
+
+### Compute feature importance matrix
+# importance_matrix <- xgb.importance(names, model = bst)
+
+### Nice graph
+# xgb.plot.importance(importance_matrix[1:10,])
+
+pred <- predict(bst, testMatrix)
+
+### Plotting the predictions versus actuals
+comparedf <- data.frame(pred = pred, act = ytest)
+
+ggplot(comparedf, aes(x=act, y=pred)) + geom_point(shape=1) + geom_smooth(method=lm)
+
+RMSE <- sqrt(mean((ytest-pred)^2))
+
+print(RMSE)
 
 
 
+plotdata <- df[idx,]
+plotdata$pred <- pred
+plotdata$loot <- round((plotdata$pred - plotdata$prijs),-2)
+
+tauchart(plotdata) %>%
+  tau_point("prijs","pred") %>%
+  tau_tooltip(c("loot", "beschrijving", "jaartal", "kilometrage", "prijs", "plaats")) %>%
+  tau_color_538(n=6)
 
 
-# Get descriptions
-d = data$beschrijving
-# Load the data as a corpus
-docs <- Corpus(VectorSource(d))
-# Convert the text to lower case
-docs <- tm_map(docs, content_transformer(tolower))
-# Remove numbers
-docs <- tm_map(docs, removeNumbers)
-# Remove your own stop word
-# specify your stopwords as a character vector
-docs <- tm_map(docs, removeWords, c("het", "een","van","bij","voor","met","binnen","o.a.","de")) 
-# Remove punctuations
-docs <- tm_map(docs, removePunctuation)
-# Eliminate extra white spaces
-docs <- tm_map(docs, stripWhitespace)
-# Build a matrix
-dtm <- TermDocumentMatrix(docs)
-m <- as.matrix(dtm)
-v <- sort(rowSums(m),decreasing=TRUE)
-d <- data.frame(word = names(v),freq=v)
-# Select top 50 occuring words
-d <- d[1:50,]
-# Create list of words
-words <- d$word
 
-# Add columns for each word
-for(word in words) {
-  data[word] <- ifelse(tolower(data$beschrijving) %like% word,1,0)
-}
 
       #d$word <- as.character(d$word) 
       #set.seed(1234)
