@@ -1,14 +1,28 @@
-# Load all necessary libraries
 
+# Cleanup
+rm(list=ls())
+
+# Load all necessary libraries
 library(rvest)
 library(stringr)
 library(dplyr)
 library(ggplot2)
 library(GGally)
 library(stringr)
+library(tm)
+library(data.table)
+library(dplyr)
+library(tidyr)
+
+# Just in case there are proxy problems
+Sys.setenv(http_proxy="")
+Sys.setenv(https_proxy="")
+Sys.unsetenv("http_proxy")
+Sys.setenv(no_proxy="*")
 
 # Global variable
-woonplaatsen <- read.csv2("/Users/wendellkuling/Repos/R_training_web_scraping/Woonplaatsen_NL.csv",stringsAsFactors = F, col.names = c("Naam"))
+#woonplaatsen <- read.csv2("/Users/wendellkuling/Repos/R_training_web_scraping/Woonplaatsen_NL.csv",stringsAsFactors = F, col.names = c("Naam"))
+woonplaatsen <- read.csv2("~/R_training_web_scraping/Woonplaatsen_NL.csv",stringsAsFactors = F, col.names = c("Naam"))
 
 
 testurl <- 'http://www.marktplaats.nl/z/auto-s/bmw/3-serie.html?categoryId=96&attributes=model%2C3-Serie&currentPage=1'
@@ -43,7 +57,7 @@ scraper <- function(url) {
       mutate(type = ifelse((substr(value, start = nchar(value)-1, stop = nchar(value)) == "km" &
                               nchar(value) <= 12 &
                               grepl("\\d", value) == T), "kilometrage", type)) %>%
-      mutate(type = ifelse((str_count(value, "\n") == 2) & grepl("â‚¬", value), "prijs", type))  %>%
+      mutate(type = ifelse((str_count(value, "\n") == 2) & (grepl("â‚¬", value) | grepl("â,¬Â", value)), "prijs", type))  %>%
       mutate(type = ifelse(is.na(type) & lapply(strsplit(value, ","), function(x) x[[1]]) %in% woonplaatsen$Naam, "plaats", type)) %>%
       mutate(type = ifelse(is.na(type), "beschrijving", type))
     
@@ -61,7 +75,7 @@ scraper <- function(url) {
   return(output_wide)
 }
  
-voorgj <- scraper(testurl)
+data <- scraper(testurl)
 
 # TODO: setting proper format and types
 
@@ -86,4 +100,52 @@ kms <- beamers %>%
   as.numeric()
 
 
-numberpages
+
+
+
+library(tm)
+library(wordcloud)
+library(SnowballC)
+library(RColorBrewer)
+library(wordcloud)
+
+# Get descriptions
+d = data$beschrijving
+# Load the data as a corpus
+docs <- Corpus(VectorSource(d))
+# Convert the text to lower case
+docs <- tm_map(docs, content_transformer(tolower))
+# Remove numbers
+docs <- tm_map(docs, removeNumbers)
+# Remove your own stop word
+# specify your stopwords as a character vector
+docs <- tm_map(docs, removeWords, c("het", "een","van","bij","voor","met","binnen","o.a.","de")) 
+# Remove punctuations
+docs <- tm_map(docs, removePunctuation)
+# Eliminate extra white spaces
+docs <- tm_map(docs, stripWhitespace)
+# Build a matrix
+dtm <- TermDocumentMatrix(docs)
+m <- as.matrix(dtm)
+v <- sort(rowSums(m),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+# Select top 50 occuring words
+d <- d[1:50,]
+# Create list of words
+words <- d$word
+
+# Add columns for each word
+for(word in words) {
+  data[word] <- ifelse(tolower(data$beschrijving) %like% word,1,0)
+}
+
+      #d$word <- as.character(d$word) 
+      #set.seed(1234)
+      #suppressWarnings(wordcloud(words = d$word, freq = d$freq, min.freq = 1,
+      #      max.words=200, random.order=FALSE, rot.per=0.35,
+      #      colors=brewer.pal(8,"Set1")))
+
+
+
+
+
