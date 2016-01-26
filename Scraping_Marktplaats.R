@@ -183,10 +183,10 @@ bst = xgboost(param=param, data = trainMatrix, label = ytrain, nrounds=200)
 names <- dimnames(trainMatrix)[[2]]
 
 ### Compute feature importance matrix
-# importance_matrix <- xgb.importance(names, model = bst)
+importance_matrix <- xgb.importance(names, model = bst)
 
 ### Nice graph
-# xgb.plot.importance(importance_matrix[1:10,])
+xgb.plot.importance(importance_matrix[1:10,])
 
 pred <- predict(bst, testMatrix)
 
@@ -205,7 +205,7 @@ plotdata <- df[idx,]
 plotdata$pred <- pred
 plotdata$loot <- round((plotdata$pred - plotdata$prijs),-2)
 plotdata$color <- ifelse(plotdata$loot > 2000, 1, ifelse(plotdata$loot < -2000, -1, 0))
-plotdata$url <- paste0("<a href='link'>http://www.marktplaats.nl/z.html?query=",gsub(" ","+",plotdata$beschrijving),"</a>")
+plotdata$url <- paste0("http://www.marktplaats.nl/z.html?query=",gsub(" ","+",plotdata$beschrijving))
 
 tauchart(plotdata) %>%
   tau_point("prijs","pred", color="color") %>%
