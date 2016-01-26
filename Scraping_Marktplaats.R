@@ -204,21 +204,22 @@ print(RMSE)
 plotdata <- df[idx,]
 plotdata$pred <- pred
 plotdata$loot <- round((plotdata$pred - plotdata$prijs),-2)
+plotdata$color <- ifelse(plotdata$loot > 2000, 1, ifelse(plotdata$loot < -2000, -1, 0))
+plotdata$url <- paste0("<a href='link'>http://www.marktplaats.nl/z.html?query=",gsub(" ","+",plotdata$beschrijving),"</a>")
 
 tauchart(plotdata) %>%
-  tau_point("prijs","pred") %>%
-  tau_tooltip(c("loot", "beschrijving", "jaartal", "kilometrage", "prijs", "plaats")) %>%
-  tau_color_538(n=6)
+  tau_point("prijs","pred", color="color") %>%
+  tau_tooltip(c("loot", "beschrijving", "jaartal", "kilometrage", "prijs", "plaats", "url")) %>%
+  tau_color_manual(c("blue","green","red"))
+
+top <- "http://www.marktplaats.nl/a/auto-s/bmw/m1009446077-bmw-3-serie-318i-sedan-luxury-line-leer-navi-xenon-72dkm.html?c=be2da871b0d84f75c3056cc6db858f31&previousPage=lr"
+flop <- "http://www.marktplaats.nl/a/auto-s/bmw/m1008795789-bmw-3-serie-m3-550pk-ess-supercharger.html?c=8c285449651fa109c354bbabe740c1b&previousPage=lr"
+
+browseURL(top)
+browseURL(flop)
 
 
-
-
-      #d$word <- as.character(d$word) 
-      #set.seed(1234)
-      #suppressWarnings(wordcloud(words = d$word, freq = d$freq, min.freq = 1,
-      #      max.words=200, random.order=FALSE, rot.per=0.35,
-      #      colors=brewer.pal(8,"Set1")))
-
-
+# TODO: 
+# Clickthrough to URL's
 
 
